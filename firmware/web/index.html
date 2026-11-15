@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room air</title>
+<style>
+:root {
+  --bg: #e6edf1; --panel: #f7fafb; --ink: #0f202d; --muted: #566a79; --line: #c7d4dc;
+  --before: #0a6a96; --after: #c2410c; --focus: #0a6a96;
+  --best: #1f9d55; --average: #d4a006; --moderate: #e0620d; --severe: #d1262b;
+  --warn-bg: #fff0c2; --warn-ink: #5a4200; --bad-bg: #fde0e0; --bad-ink: #6b1114;
+  --btn: #0f202d; --btn-ink: #f7fafb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1a24; --panel: #15232f; --ink: #e5eef4; --muted: #92a5b4; --line: #293a48;
+    --before: #52bdf0; --after: #ff9a5c; --focus: #52bdf0;
+    --warn-bg: #3b3110; --warn-ink: #f3d98a; --bad-bg: #4a1b1d; --bad-ink: #ffc9c9;
+    --btn: #e5eef4; --btn-ink: #0e1a24;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.45 "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+main { max-width: 720px; margin: 0 auto; padding: 16px 16px 56px; }
+h1 { font-size: 1.15rem; margin: 0; font-weight: 650; letter-spacing: 0.01em; }
+h2 { font-size: 0.95rem; margin: 0 0 10px; font-weight: 650; }
+section { padding: 18px 0; border-top: 1px solid var(--line); }
+.muted { color: var(--muted); }
+.small { font-size: 0.82rem; margin: 8px 0 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.top { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 14px; }
+.conn { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.conn i { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.conn.live i { background: var(--best); }
+.conn.off i { background: var(--severe); }
+
+.banner { padding: 10px 12px; margin: 0 0 8px; font-size: 0.92rem; border-left: 4px solid; }
+.banner.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--average); }
+.banner.bad { background: var(--bad-bg); color: var(--bad-ink); border-color: var(--severe); }
+
+.hero { border-top: 0; padding-top: 6px; }
+.hero-main { display: flex; align-items: baseline; gap: 16px; }
+.aqi-num { font-size: 5.2rem; line-height: 1; font-weight: 300; letter-spacing: -0.03em; }
+.band-name { font-size: 1.3rem; font-weight: 650; }
+.strip { position: relative; display: flex; height: 14px; margin-top: 18px; }
+.seg { flex: 1; }
+.seg.best { background: var(--best); } .seg.average { background: var(--average); }
+.seg.moderate { background: var(--moderate); } .seg.severe { background: var(--severe); }
+.marker {
+  position: absolute; top: -7px; width: 4px; height: 28px; margin-left: -2px;
+  background: var(--ink); box-shadow: 0 0 0 2px var(--bg); transition: left 0.6s ease;
+}
+.strip-labels { display: flex; font-size: 0.78rem; color: var(--muted); margin-top: 10px; }
+.strip-labels span { flex: 1; }
+.fan { margin: 14px 0 0; font-size: 1.05rem; }
+
+.ledger { width: 100%; border-collapse: collapse; }
+.ledger th, .ledger td { padding: 7px 4px; text-align: right; }
+.ledger thead th { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.ledger thead tr:first-child th { border-bottom: 2px solid; }
+.ledger .b { border-color: var(--before); color: var(--before); }
+.ledger .a { border-color: var(--after); color: var(--after); }
+.ledger tbody th { text-align: left; font-weight: 600; }
+.ledger td { font-size: 1.35rem; border-top: 1px solid var(--line); }
+.stale .num { opacity: 0.4; }
+
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
+.facts dt { font-size: 0.8rem; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-size: 1.5rem; }
+
+.seg-btns { display: inline-flex; border: 1px solid var(--line); margin-bottom: 8px; }
+.seg-btns button { background: none; border: 0; padding: 6px 14px; cursor: pointer; }
+.seg-btns button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
+canvas { width: 100%; height: 220px; display: block; }
+.legend { display: flex; gap: 16px; font-size: 0.85rem; margin-top: 6px; }
+.legend span::before {
+  content: ""; display: inline-block; width: 16px; height: 3px; margin-right: 6px;
+  vertical-align: middle; background: currentColor;
+}
+.legend .b { color: var(--before); } .legend .a { color: var(--after); }
+
+.unlock { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+input, select {
+  background: var(--panel); border: 1px solid var(--line); padding: 8px 10px; min-width: 0;
+}
+input[type=password] { width: 8.5em; }
+button.act {
+  background: var(--btn); color: var(--btn-ink); border: 0; padding: 9px 16px;
+  cursor: pointer; font-weight: 600;
+}
+button.act:disabled { opacity: 0.35; cursor: not-allowed; }
+button.plain { background: none; border: 1px solid var(--line); padding: 8px 14px; cursor: pointer; }
+.ctl { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ctl button[aria-current="true"] { box-shadow: 0 0 0 3px var(--focus); }
+.msg { min-height: 1.4em; margin-top: 8px; font-size: 0.9rem; }
+.msg.err { color: var(--severe); }
+
+details { border-top: 1px solid var(--line); padding: 14px 0; }
+summary { cursor: pointer; font-weight: 650; font-size: 0.95rem; }
+.field { display: grid; grid-template-columns: 1fr 7.5em; gap: 4px 12px; align-items: center;
+  padding: 8px 0; border-top: 1px solid var(--line); }
+.field label { font-weight: 600; }
+.field small { grid-column: 1 / -1; color: var(--muted); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+.events { list-style: none; margin: 0; padding: 0; font-size: 0.88rem; }
+.events li { padding: 6px 0; border-top: 1px solid var(--line); display: flex; gap: 10px; }
+.events time { color: var(--muted); flex: none; }
+.events .alert { font-weight: 650; }
+.links { display: flex; gap: 16px; margin-top: 12px; font-size: 0.92rem; }
+.links a { color: var(--before); }
+@media (prefers-reduced-motion: reduce) { .marker { transition: none; } }
+@media (max-width: 420px) { .aqi-num { font-size: 4.2rem; } .ledger td { font-size: 1.15rem; } }
+</style>
+</head>
+<body>
+<main id="page">
+  <header class="top">
+    <h1>Room air</h1>
+    <span id="conn" class="conn" role="status"><i></i><b id="connText">Connecting</b></span>
+  </header>
+  <div id="banners" aria-live="polite"></div>
+
+  <section class="hero" aria-labelledby="bandName">
+    <div class="hero-main">
+      <div class="aqi-num num" id="aqi">&ndash;</div>
+      <div>
+        <div class="band-name" id="bandName">Waiting for the sensor</div>
+        <div class="muted" id="scale"></div>
+      </div>
+    </div>
+    <div class="strip" aria-hidden="true">
+      <span class="seg best"></span><span class="seg average"></span>
+      <span class="seg moderate"></span><span class="seg severe"></span>
+      <span class="marker" id="marker" style="left:0%"></span>
+    </div>
+    <div class="strip-labels"><span>Best</span><span>Average</span><span>Moderate</span><span>Severe</span></div>
+    <p class="fan" id="fan">Purifier &ndash;</p>
+  </section>
+
+  <section>
+    <h2>Particles (&micro;g/m&sup3;)</h2>
+    <table class="ledger">
+      <thead>
+        <tr><th></th><th colspan="2" class="b">Before filter</th><th colspan="2" class="a">After filter</th></tr>
+        <tr><th></th><th>now</th><th>1-min avg</th><th>now</th><th>1-min avg</th></tr>
+      </thead>
+      <tbody>
+        <tr><th>PM2.5</th><td class="num" id="b25"></td><td class="num" id="b25a"></td><td class="num" id="a25"></td><td class="num" id="a25a"></td></tr>
+        <tr><th>PM10</th><td class="num" id="b10"></td><td class="num" id="b10a"></td><td class="num" id="a10"></td><td class="num" id="a10a"></td></tr>
+      </tbody>
+    </table>
+    <p class="small muted">&ldquo;Now&rdquo; is the newest sensor reading and jumps around. The average smooths the last minute.</p>
+  </section>
+
+  <section>
+    <h2>Filter</h2>
+    <dl class="facts">
+      <div><dt>Efficiency now</dt><dd class="num" id="effNow">&ndash;</dd></div>
+      <div><dt>Recent average</dt><dd class="num" id="effAvg">&ndash;</dd></div>
+      <div><dt>Run hours</dt><dd class="num" id="runH">&ndash;</dd></div>
+    </dl>
+    <p class="small muted" id="effNote">Efficiency is measured only while the fan runs and the air is dirty enough.</p>
+  </section>
+
+  <section>
+    <h2>Last few minutes</h2>
+    <div class="seg-btns" role="group" aria-label="Time range">
+      <button type="button" data-min="10" aria-pressed="true">10 min</button>
+      <button type="button" data-min="30" aria-pressed="false">30 min</button>
+    </div>
+    <canvas id="chart" role="img" aria-label="PM2.5 before and after the filter over time"></canvas>
+    <div class="legend"><span class="b">Before filter</span><span class="a">After filter</span></div>
+  </section>
+
+  <section>
+    <h2>Controls</h2>
+    <div class="unlock">
+      <label for="pin">PIN</label>
+      <input id="pin" type="password" inputmode="numeric" autocomplete="off">
+      <button class="act" id="unlockBtn" type="button">Unlock</button>
+    </div>
+    <div class="msg" id="ctlMsg" aria-live="polite"></div>
+    <div class="ctl" id="ctl">
+      <button class="act" data-cmd="auto" disabled>Auto</button>
+      <button class="act" data-cmd="off" disabled>Off</button>
+      <button class="act" data-cmd="speed:1" disabled>Low</button>
+      <button class="act" data-cmd="speed:2" disabled>Medium</button>
+      <button class="act" data-cmd="speed:3" disabled>High</button>
+      <button class="act" data-cmd="down" disabled>Slower</button>
+      <button class="act" data-cmd="up" disabled>Faster</button>
+    </div>
+  </section>
+
+  <details id="settings">
+    <summary>Settings</summary>
+    <p class="small muted">Changes apply right away and survive a restart. Unlock with your PIN first.</p>
+    <form id="form"></form>
+    <div class="msg" id="setMsg" aria-live="polite"></div>
+    <div class="row">
+      <button class="act" id="saveBtn" type="button">Save settings</button>
+      <button class="plain" id="defaultsBtn" type="button">Reset to defaults</button>
+      <button class="plain" id="filterBtn" type="button">I replaced the filter</button>
+    </div>
+    <div class="field">
+      <label for="newPin">New PIN</label>
+      <input id="newPin" type="password" inputmode="numeric" autocomplete="off">
+      <small>4 to 8 digits.</small>
+    </div>
+    <div class="row"><button class="plain" id="pinBtn" type="button">Change PIN</button></div>
+  </details>
+
+  <section>
+    <h2>Recent events</h2>
+    <ul class="events" id="events"><li class="muted">Nothing yet.</li></ul>
+    <div class="links">
+      <a href="/api/log.csv" download>Download hourly log</a>
+      <a href="/api/events.csv" download>Download events</a>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const S = { hist: [], last: null, lastOk: 0, fails: 0, pin: "", settings: null, win: 10 };
+const num = (v, d) => (v == null ? "\u2013" : Number(v).toFixed(d || 0));
+const BAND_NAME = { best: "Best", average: "Average", moderate: "Moderate", severe: "Severe" };
+
+async function api(path, opts) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 4000);
+  try {
+    const r = await fetch(path, Object.assign({ signal: ctl.signal }, opts || {}));
+    const text = await r.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (e) { /* not JSON */ }
+    return { ok: r.ok, status: r.status, data: data };
+  } finally { clearTimeout(timer); }
+}
+const post = (path, body) => api(path, {
+  method: "POST", headers: { "X-Pin": S.pin, "Content-Type": "application/json" },
+  body: JSON.stringify(body || {}),
+});
+
+/* ---------- live readings ---------- */
+function markerPos(aqi) {
+  const segs = [[0, 50], [50, 100], [100, 200], [200, 500]];
+  const a = Math.max(0, Math.min(500, aqi));
+  for (let i = 0; i < 4; i++) {
+    if (a <= segs[i][1]) return (i + (a - segs[i][0]) / (segs[i][1] - segs[i][0])) * 25;
+  }
+  return 100;
+}
+
+function render() {
+  const d = S.last;
+  if (!d) return;
+  $("aqi").textContent = d.before ? d.aqi : "\u2013";
+  $("bandName").textContent = d.before ? BAND_NAME[d.band] : "No sensor reading";
+  $("scale").textContent = "AQI from PM2.5, " + (d.scale === "epa" ? "US EPA" : "India CPCB") + " scale";
+  $("marker").style.left = markerPos(d.before ? d.aqi : 0) + "%";
+  const speedName = ["off", "low", "medium", "high"][d.speed];
+  $("fan").textContent = "Purifier " + (d.speed ? "on, " + speedName + " speed" : "off") +
+    ", " + (d.mode === "AUTO" ? "automatic" : "manual") +
+    (d.mode === "AUTO" ? " (" + d.state.toLowerCase() + ")" : "");
+  const b = d.before || {}, a = d.after || {};
+  $("b25").textContent = num(b.pm25); $("b25a").textContent = num(b.pm25_avg, 1);
+  $("a25").textContent = num(a.pm25); $("a25a").textContent = num(a.pm25_avg, 1);
+  $("b10").textContent = num(b.pm10); $("b10a").textContent = num(b.pm10_avg, 1);
+  $("a10").textContent = num(a.pm10); $("a10a").textContent = num(a.pm10_avg, 1);
+  $("effNow").textContent = d.eff.now == null ? "\u2013" : d.eff.now + "%";
+  $("effAvg").textContent = d.eff.avg == null ? "\u2013" : d.eff.avg + "%";
+  $("runH").textContent = num(d.run_hours, 1) + " h";
+  document.querySelectorAll("#ctl button").forEach((btn) => {
+    const c = btn.dataset.cmd;
+    const on = (c === "auto" && d.mode === "AUTO") || (c === "off" && d.mode === "MANUAL" && d.speed === 0) ||
+      (c.startsWith("speed:") && d.mode === "MANUAL" && d.speed === Number(c.slice(6)));
+    btn.setAttribute("aria-current", on ? "true" : "false");
+  });
+  banners();
+  draw();
+}
+
+function banners() {
+  const d = S.last, out = [];
+  if (S.fails >= 3) {
+    const mins = Math.max(1, Math.round((Date.now() - S.lastOk) / 60000));
+    out.push(["bad", "Purifier offline. Last reading " + mins + " min ago. Showing the last values."]);
+  }
+  if (d) {
+    if (d.fault) out.push(["bad", "The air sensor is not responding. Auto mode is paused and the fan is off."]);
+    if (d.eff.alert) out.push(["warn", "The filter is below the efficiency limit. Replace it, then press \u201cI replaced the filter\u201d in Settings."]);
+    if (d.default_pin) out.push(["warn", "The PIN is still the default (0000). Change it in Settings."]);
+    d.notes.forEach((n) => out.push(["warn", n]));
+  }
+  $("banners").innerHTML = "";
+  out.forEach((o) => {
+    const el = document.createElement("div");
+    el.className = "banner " + o[0];
+    el.textContent = o[1];
+    $("banners").appendChild(el);
+  });
+  $("page").classList.toggle("stale", S.fails >= 3);
+}
+
+function renderConn() {
+  const c = $("conn");
+  const off = S.fails >= 3;
+  c.className = "conn " + (off ? "off" : S.lastOk ? "live" : "");
+  $("connText").textContent = off ? "Offline" : S.lastOk ? "Live" : "Connecting";
+  if (off) banners();
+}
+
+function addPoint(d) {
+  const t = d.time, lastT = S.hist.length ? S.hist[S.hist.length - 1][0] : 0;
+  if (t <= lastT) return;
+  S.hist.push([t, d.before ? d.before.pm25 : null, d.after ? d.after.pm25 : null,
+    d.before ? d.before.pm25_avg : null, d.speed]);
+  while (S.hist.length > 2 && S.hist[0][0] < t - 1900) S.hist.shift();
+}
+
+async function poll() {
+  try {
+    const r = await api("/api/status");
+    if (!r.ok || !r.data) throw new Error("bad response");
+    S.fails = 0; S.lastOk = Date.now(); S.last = r.data;
+    addPoint(r.data); render();
+  } catch (e) { S.fails++; }
+  renderConn();
+}
+
+/* ---------- chart ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function draw() {
+  const cv = $("chart"), dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d");
+  g.scale(dpr, dpr);
+  g.clearRect(0, 0, w, h);
+  const L = 38, R = 8, T = 8, B = 22;
+  const endT = S.hist.length ? S.hist[S.hist.length - 1][0] : 0, span = S.win * 60;
+  const pts = S.hist.filter((p) => p[0] >= endT - span);
+  g.font = "12px system-ui, sans-serif"; g.fillStyle = css("--muted"); g.strokeStyle = css("--line");
+  if (pts.length < 2) { g.fillText("Collecting readings\u2026", L, h / 2); return; }
+  let max = 40;
+  pts.forEach((p) => { if (p[1] != null) max = Math.max(max, p[1]); if (p[2] != null) max = Math.max(max, p[2]); });
+  const s = S.settings ? S.settings.values : null;
+  if (s) max = Math.max(max, s.on_pm * 1.1);
+  const step = max > 200 ? 100 : max > 100 ? 50 : 20;
+  max = Math.ceil(max / step) * step;
+  const X = (t) => L + ((t - (endT - span)) / span) * (w - L - R);
+  const Y = (v) => T + (1 - v / max) * (h - T - B);
+  g.lineWidth = 1;
+  for (let v = 0; v <= max; v += step) {
+    g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(w - R, Y(v)); g.stroke();
+    g.textAlign = "right"; g.fillText(v, L - 6, Y(v) + 4);
+  }
+  g.textAlign = "center";
+  for (let m = 0; m <= S.win; m += S.win / 2) {
+    const t = endT - span + m * 60;
+    g.fillText(m === S.win ? "now" : "-" + (S.win - m) + "m", X(t), h - 6);
+  }
+  if (s) {
+    g.setLineDash([4, 4]); g.strokeStyle = css("--muted");
+    [s.on_pm, s.off_pm].forEach((v) => { g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(w - R, Y(v)); g.stroke(); });
+    g.setLineDash([]); g.textAlign = "left";
+    g.fillText("on " + s.on_pm, L + 4, Y(s.on_pm) - 4);
+    g.fillText("off " + s.off_pm, L + 4, Y(s.off_pm) - 4);
+  }
+  [[1, "--before"], [2, "--after"]].forEach((cfg) => {
+    g.strokeStyle = css(cfg[1]); g.lineWidth = 2; g.beginPath();
+    let pen = false;
+    pts.forEach((p) => {
+      if (p[cfg[0]] == null) { pen = false; return; }
+      if (pen) g.lineTo(X(p[0]), Y(p[cfg[0]])); else g.moveTo(X(p[0]), Y(p[cfg[0]]));
+      pen = true;
+    });
+    g.stroke();
+  });
+}
+
+document.querySelectorAll(".seg-btns button").forEach((btn) => btn.addEventListener("click", () => {
+  S.win = Number(btn.dataset.min);
+  document.querySelectorAll(".seg-btns button").forEach((x) => x.setAttribute("aria-pressed", String(x === btn)));
+  draw();
+}));
+window.addEventListener("resize", draw);
+
+/* ---------- controls ---------- */
+function say(id, text, err) { const el = $(id); el.textContent = text; el.className = "msg" + (err ? " err" : ""); }
+
+function authError(r, id) {
+  if (r.status === 403 || r.status === 429) {
+    if (r.status === 403) lock();
+    say(id, (r.data && r.data.error) || "Not allowed", true);
+    return true;
+  }
+  return false;
+}
+
+function lock() {
+  S.pin = "";
+  document.querySelectorAll("#ctl button").forEach((b) => { b.disabled = true; });
+}
+
+$("unlockBtn").addEventListener("click", async () => {
+  S.pin = $("pin").value;
+  try {
+    const r = await post("/api/auth");
+    if (r.ok) {
+      document.querySelectorAll("#ctl button").forEach((b) => { b.disabled = false; });
+      say("ctlMsg", "Unlocked. Controls and settings are ready.");
+    } else if (!authError(r, "ctlMsg")) say("ctlMsg", "Could not unlock", true);
+  } catch (e) { say("ctlMsg", "Cannot reach the purifier", true); }
+  $("pin").value = "";
+});
+
+$("ctl").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("button");
+  if (!btn || btn.disabled) return;
+  try {
+    const r = await post("/api/command", { cmd: btn.dataset.cmd });
+    if (r.ok) { say("ctlMsg", "Sent: " + btn.textContent); poll(); }
+    else if (!authError(r, "ctlMsg")) say("ctlMsg", (r.data && r.data.error) || "Command failed", true);
+  } catch (e) { say("ctlMsg", "Cannot reach the purifier", true); }
+});
+
+/* ---------- settings ---------- */
+const FIELDS = [
+  ["on_pm", "Start fan at or above", "\u00b5g/m\u00b3 PM2.5"],
+  ["off_pm", "Stop fan at or below", "\u00b5g/m\u00b3 PM2.5"],
+  ["med_pm", "Medium speed from", "\u00b5g/m\u00b3 PM2.5"],
+  ["high_pm", "High speed from", "\u00b5g/m\u00b3 PM2.5"],
+  ["max_run_s", "Longest automatic run", "minutes", 60],
+  ["rest_s", "Rest after a long run", "minutes", 60],
+  ["min_eff", "Replace-filter alert below", "efficiency, 0.5 = 50%"],
+  ["filter_hours", "Filter run-hours reminder", "hours"],
+  ["severe_alert_s", "Severe-air alert after", "minutes", 60],
+  ["alert_gap_s", "Gap between severe alerts", "minutes", 60],
+  ["aqi_scale", "AQI scale", "choice"],
+  ["tz_offset_min", "Time zone offset", "minutes from UTC (India is 330)"],
+];
+
+function buildForm() {
+  const f = $("form"), cfg = S.settings;
+  f.innerHTML = "";
+  FIELDS.forEach((fd) => {
+    const key = fd[0], k = fd[3] || 1, wrap = document.createElement("div");
+    wrap.className = "field";
+    const label = document.createElement("label");
+    label.htmlFor = "f_" + key; label.textContent = fd[1];
+    let input;
+    if (key === "aqi_scale") {
+      input = document.createElement("select");
+      cfg.choices[key].forEach((c) => {
+        const o = document.createElement("option");
+        o.value = c; o.textContent = c === "epa" ? "US EPA" : "India CPCB";
+        input.appendChild(o);
+      });
+      input.value = cfg.values[key];
+    } else {
+      input = document.createElement("input");
+      input.type = "number"; input.step = "any";
+      input.value = cfg.values[key] / k;
+    }
+    input.id = "f_" + key; input.dataset.key = key; input.dataset.k = k;
+    const hint = document.createElement("small");
+    if (cfg.limits[key]) {
+      hint.textContent = fd[2] + ". Default " + cfg.defaults[key] / k + ", allowed " +
+        cfg.limits[key][0] / k + " to " + cfg.limits[key][1] / k + ".";
+    } else hint.textContent = "Default " + (cfg.defaults[key] === "cpcb" ? "India CPCB" : cfg.defaults[key]) + ".";
+    wrap.append(label, input, hint);
+    f.appendChild(wrap);
+  });
+}
+
+async function loadSettings() {
+  try {
+    const r = await api("/api/settings");
+    if (r.ok) { S.settings = r.data; buildForm(); draw(); }
+  } catch (e) { /* retried on next load */ }
+}
+
+$("saveBtn").addEventListener("click", async () => {
+  const body = {};
+  document.querySelectorAll("#form [data-key]").forEach((el) => {
+    const key = el.dataset.key;
+    body[key] = el.tagName === "SELECT" ? el.value : Math.round(Number(el.value) * Number(el.dataset.k) * 1000) / 1000;
+  });
+  const r = await post("/api/settings", body);
+  if (r.ok) { say("setMsg", "Saved."); loadSettings(); }
+  else if (r.data && r.data.errors) say("setMsg", r.data.errors.join(". "), true);
+  else if (!authError(r, "setMsg")) say("setMsg", "Could not save", true);
+});
+
+$("defaultsBtn").addEventListener("click", async () => {
+  if (!confirm("Put every setting back to its default? Your PIN stays the same.")) return;
+  const r = await post("/api/settings/reset");
+  if (r.ok) { say("setMsg", "Defaults restored."); loadSettings(); }
+  else if (!authError(r, "setMsg")) say("setMsg", "Could not reset", true);
+});
+
+$("filterBtn").addEventListener("click", async () => {
+  if (!confirm("Reset the filter counters? Do this after fitting a new filter.")) return;
+  const r = await post("/api/filter/reset");
+  if (r.ok) { say("setMsg", "Filter counters reset."); poll(); }
+  else if (!authError(r, "setMsg")) say("setMsg", "Could not reset", true);
+});
+
+$("pinBtn").addEventListener("click", async () => {
+  const next = $("newPin").value;
+  const r = await post("/api/settings", { pin: next });
+  if (r.ok) { S.pin = next; $("newPin").value = ""; say("setMsg", "PIN changed."); poll(); }
+  else if (r.data && r.data.errors) say("setMsg", r.data.errors.join(". "), true);
+  else if (!authError(r, "setMsg")) say("setMsg", "Could not change the PIN", true);
+});
+
+/* ---------- events ---------- */
+async function loadEvents() {
+  try {
+    const r = await api("/api/events");
+    if (!r.ok) return;
+    const ul = $("events");
+    ul.innerHTML = "";
+    const rows = r.data.events.slice().reverse();
+    if (!rows.length) { ul.innerHTML = '<li class="muted">Nothing yet.</li>'; return; }
+    rows.forEach((line) => {
+      const i = line.indexOf(","), j = line.indexOf(",", i + 1);
+      const li = document.createElement("li"), t = document.createElement("time");
+      t.textContent = line.slice(0, i).slice(5);
+      const m = document.createElement("span");
+      m.textContent = (line.slice(i + 1, j) === "info" ? "" : line.slice(i + 1, j) + ": ") + line.slice(j + 1);
+      if (line.slice(i + 1, j) === "alert") m.className = "alert";
+      li.append(t, m);
+      ul.appendChild(li);
+    });
+  } catch (e) { /* retried */ }
+}
+
+/* ---------- start ---------- */
+async function start() {
+  try {
+    const r = await api("/api/live");
+    if (r.ok) S.hist = r.data.points.filter((p) => p[0]);
+  } catch (e) { /* history fills in as readings arrive */ }
+  poll(); loadSettings(); loadEvents();
+  setInterval(poll, 2000);
+  setInterval(loadEvents, 15000);
+}
+start();
+</script>
+</body>
+</html>

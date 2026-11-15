@@ -1,0 +1,8 @@
+Air purifier / cooler controller, with a hardware-free simulation.
+
+Run the demo:   python purifier.py
+Run the tests:  python -m unittest test_purifier -v
+
+To go real later, replace SimRoom's sensors with PMS5003 readers and
+Relays with a GPIO version that has the same set_speed() interface.
+The Controller does not change.
